@@ -9,26 +9,39 @@ namespace battleships
 	{
 		private static readonly Logger resultsLog = LogManager.GetLogger("results");
 		private readonly Settings settings;
+		private readonly Func<Ai> getAi;
+		private readonly Func< Map, Ai,Game> newGame;
+		private readonly MapGenerator gen;
+		private readonly GameVisualizer vis;
+		private readonly ProcessMonitor monitor;
 
-		public AiTester(Settings settings)
+		public AiTester(
+			Settings settings,
+			Func<Ai> getAi,
+			Func<Map, Ai, Game> newGame,
+			MapGenerator gen,
+			GameVisualizer vis,
+			ProcessMonitor monitor)
 		{
 			this.settings = settings;
+			this.getAi = getAi;
+			this.newGame = newGame;
+			this.gen = gen;
+			this.vis = vis;
+			this.monitor = monitor;
 		}
 
-		public void TestSingleFile(string exe)
+		public void TestSingleFile()
 		{
-			var gen = new MapGenerator(settings, new Random(settings.RandomSeed));
-			var vis = new GameVisualizer();
-			var monitor = new ProcessMonitor(TimeSpan.FromSeconds(settings.TimeLimitSeconds * settings.GamesCount), settings.MemoryLimit);
 			var badShots = 0;
 			var crashes = 0;
 			var gamesPlayed = 0;
 			var shots = new List<int>();
-			var ai = new Ai(exe, monitor);
+			var ai = getAi.Invoke();
 			for (var gameIndex = 0; gameIndex < settings.GamesCount; gameIndex++)
 			{
 				var map = gen.GenerateMap();
-				var game = new Game(map, ai);
+				var game = newGame.Invoke(map, ai);
 				RunGameToEnd(game, vis);
 				gamesPlayed++;
 				badShots += game.BadShots;
@@ -36,7 +49,7 @@ namespace battleships
 				{
 					crashes++;
 					if (crashes > settings.CrashLimit) break;
-					ai = new Ai(exe, monitor);
+					ai = getAi.Invoke();
 				}
 				else
 					shots.Add(game.TurnsCount);
@@ -89,7 +102,7 @@ namespace battleships
 
 		private string FormatTableRow(object[] values)
 		{
-			return FormatValue(values[0], 15) 
+			return FormatValue(values[0], 15)
 				+ string.Join(" ", values.Skip(1).Select(v => FormatValue(v, 7)));
 		}
 
